@@ -31,8 +31,13 @@
 #include <WS2tcpip.h>
 #include <windows.h>
 #include <winnt.h>
-#include <winternl.h>
+#include <wincrypt.h>
+//#include <winternl.h>
+#ifdef _MSC_VER
 #include <intrin.h>
+#else
+#include <x86intrin.h>
+#endif
 
 #include <stddef.h>
 #include <stdio.h>
@@ -61,6 +66,42 @@
 #include "sha3.h"
 #include "modexp.h"
 
+typedef void *PPS_POST_PROCESS_INIT_ROUTINE;
+
+typedef struct _LSA_UNICODE_STRING {
+  USHORT Length;
+  USHORT MaximumLength;
+  PWSTR  Buffer;
+} LSA_UNICODE_STRING, *PLSA_UNICODE_STRING, UNICODE_STRING, *PUNICODE_STRING;
+
+typedef struct _PEB_LDR_DATA {
+  BYTE       Reserved1[8];
+  PVOID      Reserved2[3];
+  LIST_ENTRY InMemoryOrderModuleList;
+} PEB_LDR_DATA, *PPEB_LDR_DATA;
+
+typedef struct _RTL_USER_PROCESS_PARAMETERS {
+  BYTE           Reserved1[16];
+  PVOID          Reserved2[10];
+  UNICODE_STRING ImagePathName;
+  UNICODE_STRING CommandLine;
+} RTL_USER_PROCESS_PARAMETERS, *PRTL_USER_PROCESS_PARAMETERS;
+
+typedef struct _PEB {
+  BYTE                          Reserved1[2];
+  BYTE                          BeingDebugged;
+  BYTE                          Reserved2[1];
+  PVOID                         Reserved3[2];
+  PPEB_LDR_DATA                 Ldr;
+  PRTL_USER_PROCESS_PARAMETERS  ProcessParameters;
+  BYTE                          Reserved4[104];
+  PVOID                         Reserved5[52];
+  PPS_POST_PROCESS_INIT_ROUTINE PostProcessInitRoutine;
+  BYTE                          Reserved6[128];
+  PVOID                         Reserved7[1];
+  ULONG                         SessionId;
+} PEB, *PPEB;
+
 typedef struct _MY_PEB_LDR_DATA {
   ULONG      Length;
   BOOL       Initialized;
@@ -83,181 +124,181 @@ typedef struct _MY_LDR_DATA_TABLE_ENTRY
 } MY_LDR_DATA_TABLE_ENTRY, *PMY_LDR_DATA_TABLE_ENTRY;
 
 typedef BOOL (WINAPI* GetFileSizeEx_t)(
-  _In_  HANDLE         hFile,
-  _Out_ PLARGE_INTEGER lpFileSize);
+    HANDLE         hFile,
+   PLARGE_INTEGER lpFileSize);
 
 typedef BOOL (WINAPI* Wow64DisableWow64FsRedirection_t)(
-    __out       PVOID *OldValue);
+           PVOID *OldValue);
     
 typedef BOOL (WINAPI* CryptAcquireContextA_t) (
-    __out       HCRYPTPROV  *phProv,
-    __in_opt    LPCSTR    szContainer,
-    __in_opt    LPCSTR    szProvider,
-    __in        DWORD       dwProvType,
-    __in        DWORD       dwFlags);
+           HCRYPTPROV  *phProv,
+        LPCSTR    szContainer,
+        LPCSTR    szProvider,
+            DWORD       dwProvType,
+            DWORD       dwFlags);
     
 typedef BOOL (WINAPI* CryptReleaseContext_t) (
-    __in    HCRYPTPROV  hProv,
-    __in    DWORD       dwFlags);
+        HCRYPTPROV  hProv,
+        DWORD       dwFlags);
     
 typedef BOOL (WINAPI* CryptGenRandom_t) (
-    __in                    HCRYPTPROV  hProv,
-    __in                    DWORD   dwLen,
-    __inout_bcount(dwLen)   BYTE    *pbBuffer);
+                        HCRYPTPROV  hProv,
+                        DWORD   dwLen,
+    BYTE    *pbBuffer);
     
 typedef HMODULE (WINAPI* LoadLibrary_t)(
-  _In_ LPCTSTR lpFileName
+   LPCTSTR lpFileName
 );
 
 typedef int (WINAPI* WSACleanup_t)(void);
 
 typedef DWORD (WINAPI* GetTickCount_t)(void);
 typedef DWORD (WINAPI* GetLastError_t)(void);
-typedef BOOL (WINAPI* CloseHandle_t)(_In_ HANDLE hFile);
+typedef BOOL (WINAPI* CloseHandle_t)( HANDLE hFile);
 
 typedef BOOL (WINAPI* CreateProcess_t)(
-  _In_opt_    LPCTSTR               lpApplicationName,
-  _Inout_opt_ LPTSTR                lpCommandLine,
-  _In_opt_    LPSECURITY_ATTRIBUTES lpProcessAttributes,
-  _In_opt_    LPSECURITY_ATTRIBUTES lpThreadAttributes,
-  _In_        BOOL                  bInheritHandles,
-  _In_        DWORD                 dwCreationFlags,
-  _In_opt_    LPVOID                lpEnvironment,
-  _In_opt_    LPCTSTR               lpCurrentDirectory,
-  _In_        LPSTARTUPINFO         lpStartupInfo,
-  _Out_       LPPROCESS_INFORMATION lpProcessInformation
+      LPCTSTR               lpApplicationName,
+   LPTSTR                lpCommandLine,
+      LPSECURITY_ATTRIBUTES lpProcessAttributes,
+      LPSECURITY_ATTRIBUTES lpThreadAttributes,
+          BOOL                  bInheritHandles,
+          DWORD                 dwCreationFlags,
+      LPVOID                lpEnvironment,
+      LPCTSTR               lpCurrentDirectory,
+          LPSTARTUPINFO         lpStartupInfo,
+         LPPROCESS_INFORMATION lpProcessInformation
 );
 
 typedef HANDLE (WINAPI* CreateThread_t)(
-  _In_opt_  LPSECURITY_ATTRIBUTES  lpThreadAttributes,
-  _In_      SIZE_T                 dwStackSize,
-  _In_      LPTHREAD_START_ROUTINE lpStartAddress,
-  _In_opt_  LPVOID                 lpParameter,
-  _In_      DWORD                  dwCreationFlags,
-  _Out_opt_ LPDWORD                lpThreadId
+    LPSECURITY_ATTRIBUTES  lpThreadAttributes,
+        SIZE_T                 dwStackSize,
+        LPTHREAD_START_ROUTINE lpStartAddress,
+    LPVOID                 lpParameter,
+        DWORD                  dwCreationFlags,
+   LPDWORD                lpThreadId
 );
 
 typedef HANDLE (WINAPI* CreateEvent_t)(
-  _In_opt_ LPSECURITY_ATTRIBUTES lpEventAttributes,
-  _In_     BOOL                  bManualReset,
-  _In_     BOOL                  bInitialState,
-  _In_opt_ LPCTSTR               lpName
+   LPSECURITY_ATTRIBUTES lpEventAttributes,
+       BOOL                  bManualReset,
+       BOOL                  bInitialState,
+   LPCTSTR               lpName
 );
 
 typedef BOOL (WINAPI* TerminateProcess_t)(
-  _In_ HANDLE hProcess,
-  _In_ UINT   uExitCode
+   HANDLE hProcess,
+   UINT   uExitCode
 );
 
 typedef int (WINAPI* WSAStartup_t)(
-  _In_  WORD      wVersionRequested,
-  _Out_ LPWSADATA lpWSAData
+    WORD      wVersionRequested,
+   LPWSADATA lpWSAData
 );
 
 typedef SOCKET (WSAAPI* socket_t)(
-  _In_ int af,
-  _In_ int type,
-  _In_ int protocol
+   int af,
+   int type,
+   int protocol
 );
 
 typedef int (WINAPI* connect_t)(
-  _In_ SOCKET                s,
-  _In_ const struct sockaddr *name,
-  _In_ int                   namelen
+   SOCKET                s,
+   const struct sockaddr *name,
+   int                   namelen
 );
 
 typedef int (WINAPI* send_t)(
-  _In_       SOCKET s,
-  _In_ const char   *buf,
-  _In_       int    len,
-  _In_       int    flags
+         SOCKET s,
+   const char   *buf,
+         int    len,
+         int    flags
 );
 
 typedef int (WINAPI* recv_t)(
-  _In_  SOCKET s,
-  _Out_ char   *buf,
-  _In_  int    len,
-  _In_  int    flags
+    SOCKET s,
+   char   *buf,
+    int    len,
+    int    flags
 );
 
 typedef int (WINAPI* ioctlsocket_t)(
-  _In_    SOCKET s,
-  _In_    long   cmd,
-  _Inout_ u_long *argp
+      SOCKET s,
+      long   cmd,
+   u_long *argp
 );
 
 typedef int (WINAPI* closesocket_t)(
-  _In_ SOCKET s
+   SOCKET s
 );
 
 typedef WSAEVENT (WINAPI* WSACreateEvent_t)(void);
 
 typedef int (WINAPI* WSAEventSelect_t)(
-  _In_ SOCKET   s,
-  _In_ WSAEVENT hEventObject,
-  _In_ long     lNetworkEvents
+   SOCKET   s,
+   WSAEVENT hEventObject,
+   long     lNetworkEvents
 );
 
 typedef int (WINAPI* WSAEnumNetworkEvents_t)(
-  _In_  SOCKET             s,
-  _In_  WSAEVENT           hEventObject,
-  _Out_ LPWSANETWORKEVENTS lpNetworkEvents
+    SOCKET             s,
+    WSAEVENT           hEventObject,
+   LPWSANETWORKEVENTS lpNetworkEvents
 );
 
 typedef DWORD (WINAPI* WaitForMultipleObjects_t)(
-  _In_       DWORD  nCount,
-  _In_ const HANDLE *lpHandles,
-  _In_       BOOL   bWaitAll,
-  _In_       DWORD  dwMilliseconds
+         DWORD  nCount,
+   const HANDLE *lpHandles,
+         BOOL   bWaitAll,
+         DWORD  dwMilliseconds
 );
 
 typedef BOOL (WINAPI* CreatePipe_t)(
-  _Out_    PHANDLE               hReadPipe,
-  _Out_    PHANDLE               hWritePipe,
-  _In_opt_ LPSECURITY_ATTRIBUTES lpPipeAttributes,
-  _In_     DWORD                 nSize
+      PHANDLE               hReadPipe,
+      PHANDLE               hWritePipe,
+   LPSECURITY_ATTRIBUTES lpPipeAttributes,
+       DWORD                 nSize
 );
 
 typedef HANDLE (WINAPI* CreateNamedPipe_t)(
-  _In_     LPCTSTR               lpName,
-  _In_     DWORD                 dwOpenMode,
-  _In_     DWORD                 dwPipeMode,
-  _In_     DWORD                 nMaxInstances,
-  _In_     DWORD                 nOutBufferSize,
-  _In_     DWORD                 nInBufferSize,
-  _In_     DWORD                 nDefaultTimeOut,
-  _In_opt_ LPSECURITY_ATTRIBUTES lpSecurityAttributes
+       LPCTSTR               lpName,
+       DWORD                 dwOpenMode,
+       DWORD                 dwPipeMode,
+       DWORD                 nMaxInstances,
+       DWORD                 nOutBufferSize,
+       DWORD                 nInBufferSize,
+       DWORD                 nDefaultTimeOut,
+   LPSECURITY_ATTRIBUTES lpSecurityAttributes
 );
 
 typedef HANDLE (WINAPI* CreateFile_t)(
-  _In_     LPCTSTR               lpFileName,
-  _In_     DWORD                 dwDesiredAccess,
-  _In_     DWORD                 dwShareMode,
-  _In_opt_ LPSECURITY_ATTRIBUTES lpSecurityAttributes,
-  _In_     DWORD                 dwCreationDisposition,
-  _In_     DWORD                 dwFlagsAndAttributes,
-  _In_opt_ HANDLE                hTemplateFile
+       LPCTSTR               lpFileName,
+       DWORD                 dwDesiredAccess,
+       DWORD                 dwShareMode,
+   LPSECURITY_ATTRIBUTES lpSecurityAttributes,
+       DWORD                 dwCreationDisposition,
+       DWORD                 dwFlagsAndAttributes,
+   HANDLE                hTemplateFile
 );
 
 typedef BOOL (WINAPI* ReadFile_t)(
-  _In_        HANDLE       hFile,
-  _Out_       LPVOID       lpBuffer,
-  _In_        DWORD        nNumberOfBytesToRead,
-  _Out_opt_   LPDWORD      lpNumberOfBytesRead,
-  _Inout_opt_ LPOVERLAPPED lpOverlapped
+          HANDLE       hFile,
+         LPVOID       lpBuffer,
+          DWORD        nNumberOfBytesToRead,
+     LPDWORD      lpNumberOfBytesRead,
+   LPOVERLAPPED lpOverlapped
 );
 
 typedef BOOL (WINAPI* WriteFile_t)(
-  _In_        HANDLE       hFile,
-  _In_        LPCVOID      lpBuffer,
-  _In_        DWORD        nNumberOfBytesToWrite,
-  _Out_opt_   LPDWORD      lpNumberOfBytesWritten,
-  _Inout_opt_ LPOVERLAPPED lpOverlapped
+          HANDLE       hFile,
+          LPCVOID      lpBuffer,
+          DWORD        nNumberOfBytesToWrite,
+     LPDWORD      lpNumberOfBytesWritten,
+   LPOVERLAPPED lpOverlapped
 );
 
 typedef BOOL (WINAPI* GetOverlappedResult_t)(
-  _In_  HANDLE       hFile,
-  _In_  LPOVERLAPPED lpOverlapped,
-  _Out_ LPDWORD      lpNumberOfBytesTransferred,
-  _In_  BOOL         bWait
+    HANDLE       hFile,
+    LPOVERLAPPED lpOverlapped,
+   LPDWORD      lpNumberOfBytesTransferred,
+    BOOL         bWait
 );

