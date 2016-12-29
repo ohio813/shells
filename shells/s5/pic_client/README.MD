@@ -40,11 +40,11 @@ And here's screen shot of session with client PIC
 
 Both include x86 and x64 versions
 
-1.Windows NT (unlikely without changes to API, specifically winsock)
-2.Windows 2000 (depending on service pack, requires changes like NT)
-3.Windows XP (working on SP1)
-4.Windows 7 (presumably Vista works but untested)
-5.Windows 10
+1. Windows NT (unlikely without changes to API, specifically winsock)
+2. Windows 2000 (depending on service pack, requires changes like NT)
+3. Windows XP (working on SP1)
+4. Windows 7 (presumably Vista works but untested)
+5. Windows 10
 
 # Known problems
 
