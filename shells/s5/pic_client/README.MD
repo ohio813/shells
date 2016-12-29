@@ -22,11 +22,11 @@ To compile an EXE file for debugging purposes, uncomment DEBUG in include.h and 
 
 Only the DEBUG version of pic_client displays anything to screen so the following is just output of runsc executing spz.bin on localhost.
 
-![PIC client](https://github.com/odzhan/shells/tree/master/shells/s5/pic_client/pic_client_ss.png)
+![alt text](https://github.com/odzhan/shells/tree/master/shells/s5/pic_client/pic_client_ss.png)
 
 And here's screen shot of session with client PIC
 
-![s5 server](https://github.com/odzhan/shells/tree/master/shells/s5/pic_client/s5_server_ss.png)
+![alt text](https://github.com/odzhan/shells/tree/master/shells/s5/pic_client/s5_server_ss.png)
 
 # Known problems
 
