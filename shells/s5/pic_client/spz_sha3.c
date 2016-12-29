@@ -101,7 +101,7 @@ typedef struct _spp_blk_t {
 // traffic encryption keys
 typedef struct _spp_tek_t {
   uint8_t ekey[SPP_EKEY_LEN];   // 256-bit symmetric key for encryption
-  uint8_t ctr[SPP_MAC_LEN];     // 128-bit block counter
+  uint8_t ctr[SPP_CTR_LEN];     // 128-bit block counter
   uint8_t mkey[SPP_MKEY_LEN];   // 128-bit key for message authentication
   uint8_t pad[SPP_DATA_LEN];
 } spp_tek;
@@ -368,12 +368,50 @@ LPVOID getapi (DWORD dwHash)
   return api_adr;
 }
 
-void spp_dump(void *tek) {
+void spp_dump(void *tek, int len, char *str) {
 #if defined(DEBUG) && DEBUG > 0
   int i;
-  for (i=0; i<16; i++) {
+  printf ("\n%s = ", str);
+  for (i=0; i<len; i++) {
     printf ("%02x", ((uint8_t*)tek)[i]);
   }
+#endif
+}
+
+void spp_mac(sc_tbl *x, void *data, uint32_t data_len, uint8_t *out);
+void aes_ctr_encrypt(sc_tbl *c, void *data, uint32_t len);
+
+void show_keys(sc_tbl *c) {
+#if defined(DEBUG) && DEBUG > 0
+  int     i;
+  spp_len magic;
+  uint8_t mac[SPP_MAC_LEN];
+  
+  memset((uint8_t*)&magic, 0, sizeof(magic));
+  
+  printf ("\nAES Key : ");
+  for (i=0; i<SPP_EKEY_LEN; i++) {
+    printf ("%02x", c->v.tek.ekey[i]);
+  }
+  printf ("\nMAC Key : ");
+  for (i=0; i<SPP_MKEY_LEN; i++) {
+    printf ("%02x", c->v.tek.mkey[i]);
+  }
+  printf ("\nAES CTR : ");
+  for (i=0; i<SPP_CTR_LEN; i++) {
+    printf ("%02x", c->v.tek.ctr[i]);
+  }
+  /*spp_mac(c, &magic, 4, mac);
+  spp_dump(mac, 16, "mac");
+  
+  memset((uint8_t*)&magic, 0, sizeof(magic));
+  spp_dump((uint8_t*)&magic, 16, "before enc");
+  
+  aes_ctr_encrypt(c, (uint8_t*)&magic, sizeof(magic));
+  spp_dump((uint8_t*)&magic, 16, "after enc");
+  
+  aes_ctr_encrypt(c, (uint8_t*)&magic, sizeof(magic));
+  spp_dump((uint8_t*)&magic, 16, "after dec");*/
 #endif
 }
 
@@ -389,19 +427,44 @@ VOID spp_rand (sc_tbl *x, PBYTE out, DWORD outlen)
 
 /**F*********************************************
  *
+ * Pad SPP data buffer with random bytes
+ *
+ ************************************************/
+void spp_pad (sc_tbl *x)
+{
+  x->v.blk.len.padlen = (x->v.blk.len.buflen & (SPP_BLK_LEN-1));
+  
+  // if not zero
+  if (x->v.blk.len.padlen) {
+    // calculate how much padding bytes required
+    x->v.blk.len.padlen = (SPP_BLK_LEN - x->v.blk.len.padlen);
+    
+    // generate random bytes
+    spp_rand (x, &x->v.blk.data.b[x->v.blk.len.buflen], x->v.blk.len.padlen);
+    
+    // update block len to include padding
+    x->v.blk.len.buflen += x->v.blk.len.padlen;
+  }
+}
+/**F*********************************************
+ *
  * Generate MAC of SPP data
  *
  ************************************************/
-VOID spp_mac(sc_tbl *x, void *data, uint32_t len, uint8_t *out)
+void spp_mac(sc_tbl *x, void *data, uint32_t data_len, uint8_t *out)
 {
   SHA3_CTX c;
-  BYTE     m[SHA3_256];
+  uint8_t  m[SHA3_256];
+  int      i;
+  
+  DEBUG_PRINT("Generating MAC for %i bytes of data", data_len);
+  spp_dump(data, data_len, "mac data");
   
   SHA3_Init(&c, SHA3_256);                       // initialize
   SHA3_Update(&c, x->v.tek.mkey, SPP_MKEY_LEN);  // add mac key
-  SHA3_Update(&c, data, len);                    // add data
+  SHA3_Update(&c, data, data_len);               // add data
   SHA3_Final(m, &c);                             // save
-  
+
   memcpy(out, m, SPP_MAC_LEN);
 }
 /**F*********************************************
@@ -440,9 +503,12 @@ void update_ctr (uint8_t *ctr)
 
 void aes_ctr_encrypt(sc_tbl *c, void *data, uint32_t len)
 {
-  uint32_t r, inlen=len;
+  uint32_t i, r, inlen=len;
   uint8_t  *p=(uint8_t*)data;
   uint8_t  ctr[SPP_CTR_LEN];
+  
+  DEBUG_PRINT("Decrypting/Encrypting %i bytes", len);
+  spp_dump(data, len, "enc data");
   
   while (inlen)
   {
@@ -474,9 +540,11 @@ void aes_ctr_encrypt(sc_tbl *c, void *data, uint32_t len)
 int spp_crypt (sc_tbl *c, void *data, 
     uint32_t len, int enc)
 {
-  uint8_t mac[SPP_MAC_LEN];
-  uint8_t *p=(uint8_t*)data;
+  uint8_t  mac[SPP_MAC_LEN];
+  uint8_t  *p=(uint8_t*)data;
   uint32_t data_len=len;
+  
+  DEBUG_PRINT("Entering spp_crypt with %i bytes", len);
   
   if (enc==SPP_DECRYPT)
   {
@@ -489,6 +557,7 @@ int spp_crypt (sc_tbl *c, void *data,
     // compare if equal
     if (memcmp (mac, &p[data_len], SPP_MAC_LEN)!=0) {
       DEBUG_PRINT("mac is invalid");
+      spp_dump(mac, SPP_MAC_LEN, "mac result");
       return SPP_ERR_MAC;
     }
   }
@@ -501,6 +570,7 @@ int spp_crypt (sc_tbl *c, void *data,
     spp_mac (c, data, data_len, &p[data_len]);
     data_len += SPP_MAC_LEN;
   }
+  DEBUG_PRINT("Leaving spp_crypt with %i bytes", data_len);
   return data_len;
 }
 
@@ -529,24 +599,34 @@ int send_pkt (sc_tbl *c, void *in, uint32_t inlen)
  ************************************************/
 int spp_send (sc_tbl *c)
 {
-  int len = c->v.blk.len.w;
+  int      len;
+  uint32_t data_len = c->v.blk.len.w;
   
-  // 1. if not secure mode, goto step 5
+  DEBUG_PRINT("entering spp_send to send %i bytes", data_len);
+  
+  // 1. if not secure mode, goto step 3
   if (c->v.secure) {
+    if (data_len) c->v.blk.len.w += SPP_MAC_LEN;
     // 2. encrypt the length, add mac
-    spp_crypt(c, &c->v.blk.len.w, sizeof(int), SPP_ENCRYPT);
-    // 3. if no data, goto step 5
-    if (len!=0) {
-      // 4. encrypt data, add mac
-      len=spp_crypt(c, c->v.blk.data.b, len, SPP_ENCRYPT);
-    }
+    spp_crypt(c, c->v.blk.len.b, sizeof(int), SPP_ENCRYPT);
   }
-  // 5. send what we have
-  len=send_pkt (c, &c->v.blk.len.w, 
-      len + sizeof(spp_len));
-      
-  // 6. return OK if no error
-  return (len<=0) ? SPP_ERR_SCK : SPP_ERR_OK;
+  // 3. send length
+  len = send_pkt(c, &c->v.blk.len.b, sizeof(spp_len));
+  
+  if (data_len)
+  {
+    // 4. if not secure mode, goto step 6
+    if (c->v.secure) {
+      // 5. encrypt data
+      data_len=spp_crypt(c, &c->v.blk.data.b, data_len, SPP_ENCRYPT);
+    }
+    // 6. send data
+    len = send_pkt (c, &c->v.blk.data.b, data_len);
+  }
+  DEBUG_PRINT("leaving spp_send after sending %i bytes", len);
+  
+  // 7. return OK if no error
+  return (len < 0) ? SPP_ERR_SCK : SPP_ERR_OK;
 }
 
 /**F*********************************************
@@ -576,9 +656,13 @@ int spp_recv (sc_tbl *c)
 {
   int len;
   
+  DEBUG_PRINT("entering spp_recv");
+  
   // 1. receive the length
-  len=recv_pkt (c, &c->v.blk.len.w, sizeof(spp_len));
+  len=recv_pkt (c, c->v.blk.len.b, sizeof(spp_len));
 
+  spp_dump(c->v.blk.len.b, sizeof(spp_len), "length");
+  
   // 2. if socket error, return SCK error
   if (len<=0) {
     DEBUG_PRINT("recv_pkt for length error");
@@ -587,13 +671,15 @@ int spp_recv (sc_tbl *c)
   
   // 3. if not secure, goto step 6
   if (c->v.secure) {
+    DEBUG_PRINT("Decrypting Length: %08X", c->v.blk.len.w);
     // 4. decrypt the length, verify mac
-    len=spp_crypt(c, &c->v.blk.len.w, sizeof(spp_len), SPP_DECRYPT);
+    len=spp_crypt(c, c->v.blk.len.b, sizeof(spp_len), SPP_DECRYPT);
     // 5. if decryption error, return ENC error
     if (len<0) {
       DEBUG_PRINT("spp_crypt error for length");
       return SPP_ERR_ENC;
     }
+    DEBUG_PRINT("buf len = %i len = %i", c->v.blk.len.buflen, len);
   }
   
   // 6. if zero length, return OK
@@ -634,7 +720,12 @@ int spp_recv (sc_tbl *c)
       DEBUG_PRINT("spp_crypt error for data");
       return SPP_ERR_ENC;
     }
+    c->v.blk.len.buflen = len;
+    DEBUG_PRINT("buf len = %i len = %i", c->v.blk.len.buflen, len);
+    c->v.blk.data.b[len] = 0;
   }
+  
+  DEBUG_PRINT("leaving spp_recv");
   
   // 14. return OK if no errors
   return (len<=0) ? SPP_ERR_SCK : SPP_ERR_OK;
@@ -661,15 +752,6 @@ void spp_genkeys(sc_tbl *x)
   
   // set 256-bit key for aes
   AES_setkey(x->v.tek.ekey, &x->v.ctx);
-}
-
-void spp_showkeys(sc_tbl *c) {
-#if defined(DEBUG) && DEBUG > 0
-  int i;
-  for (i=0; i<64; i++) {
-    printf ("%02x", ((uint8_t*)&c->v.tek)[i]);
-  }
-#endif
 }
 
 /**F*********************************************
@@ -705,26 +787,23 @@ int key_xchg (sc_tbl *x)
   
   DEBUG_PRINT ("\nreceived %i byte modulus = ", 
       x->v.blk.len.buflen);
-  spp_dump(m.v8);
+      
+  spp_dump(m.v8, x->v.blk.len.w, "modulus");
   
   // copy session keys to bn
   memcpy (b.v8, (uint8_t*)&x->v.tek, SPP_TEK_LEN);
   
   // pad remainder of buffer so that we have at least
   // same number of bytes as modulus
-  //spp_rand (x, &b.v8[SPP_TEK_LEN], (SPP_RSA_LEN/8) - SPP_TEK_LEN);
+  spp_rand (x, &b.v8[SPP_TEK_LEN], 
+      (SPP_RSA_LEN/8) - (SPP_TEK_LEN + 2));
   
   // encrypt session keys
   bn_expmod(&r, &b, &e, &m);
   
   // copy encrypted keys to buffer
   memcpy (x->v.blk.data.b, r.v8, x->v.blk.len.w);
-  
-  DEBUG_PRINT ("\n\nmy keys are = ");
-  spp_showkeys(x);
-  
-  DEBUG_PRINT ("\n\nsending this = ");
-  spp_dump(&x->v.blk.data.b);
+  show_keys(x);
   
   // send encrypted keys
   err=spp_send(x);
