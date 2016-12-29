@@ -301,7 +301,8 @@ LPVOID getapi (DWORD dwHash)
   PIMAGE_DOS_HEADER        dos;
   PIMAGE_NT_HEADERS        nt;
   PVOID                    base;
-  DWORD                    cnt=0, ofs=0, i, j, idx, rva, api_h, dll_h;
+  DWORD                    cnt=0, ofs=0, i, j;
+  DWORD                    idx, rva, api_h, dll_h;
   PIMAGE_DATA_DIRECTORY    dir;
   PIMAGE_EXPORT_DIRECTORY  exp;
   PDWORD                   adr;
@@ -360,7 +361,9 @@ LPVOID getapi (DWORD dwHash)
               dwHash, api_adr);
               
           // copy DLL name to buffer
-          for (i=0, p=api_adr; p[i] != 0 && i < sizeof(dll_name)-1; i++) {
+          for (i=0, p=api_adr; p[i] != 0 && 
+              i < sizeof(dll_name)-4; i++) 
+          {
             dll_name[i] = p[i];
             if (p[i] == '.') break;
           }
@@ -369,7 +372,9 @@ LPVOID getapi (DWORD dwHash)
           dll_name[i+3] = 'L';
           dll_name[i+4] = 0;
           // copy API name to buffer
-          for(j=0; p[++i] != 0 && j < sizeof(api_name)-1; j++) { 
+          for(j=0; p[++i] != 0 && 
+              j < sizeof(api_name)-1; j++) 
+          { 
             api_name[j] = p[i]; 
           }
           api_name[j] = 0;
