@@ -152,20 +152,20 @@ int spp_rand (spp_ctx *c, void *out, uint32_t outlen)
  * Pad SPP data buffer with random bytes
  *
  ************************************************/
-void spp_pad (sc_tbl *x)
+void spp_pad (spp_ctx *c, spp_blk *x)
 {
-  x->v.blk.padlen = (x->v.blk.buflen & (SPP_BLK_LEN-1));
+  x->len.padlen = (x->len.buflen & (SPP_BLK_LEN-1));
   
   // if not zero
-  if (x->v.blk.padlen) {
+  if (x->len.padlen) {
     // calculate how much padding bytes required
-    x->v.blk.padlen = (SPP_BLK_LEN - x->v.blk.padlen);
+    x->len.padlen = (SPP_BLK_LEN - x->len.padlen);
     
     // generate random bytes
-    spp_rand (x, &x->v.blk.buf[x->v.blk.buflen], x->v.blk.padlen);
+    spp_rand (c, &x->data.b[x->len.buflen], x->len.padlen);
     
     // update block len to include padding
-    x->v.blk.buflen += x->v.blk.padlen;
+    x->len.buflen += x->len.padlen;
   }
 }
 /**F*********************************************

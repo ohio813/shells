@@ -422,18 +422,18 @@ VOID spp_rand (sc_tbl *x, PBYTE out, DWORD outlen)
  ************************************************/
 void spp_pad (sc_tbl *x)
 {
-  x->v.blk.padlen = (x->v.blk.buflen & (SPP_BLK_LEN-1));
+  x->v.blk.len.padlen = (x->v.blk.len.buflen & (SPP_BLK_LEN-1));
   
   // if not zero
-  if (x->v.blk.padlen) {
+  if (x->v.blk.len.padlen) {
     // calculate how much padding bytes required
-    x->v.blk.padlen = (SPP_BLK_LEN - x->v.blk.padlen);
+    x->v.blk.len.padlen = (SPP_BLK_LEN - x->v.blk.len.padlen);
     
     // generate random bytes
-    spp_rand (x, &x->v.blk.buf[x->v.blk.buflen], x->v.blk.padlen);
+    spp_rand (x, &x->v.blk.data.b[x->v.blk.len.buflen], x->v.blk.len.padlen);
     
     // update block len to include padding
-    x->v.blk.buflen += x->v.blk.padlen;
+    x->v.blk.len.buflen += x->v.blk.len.padlen;
   }
 }
 /**F*********************************************
@@ -786,7 +786,7 @@ int key_xchg (sc_tbl *x)
   // pad remainder of buffer so that we have at least
   // same number of bytes as modulus
   spp_rand (x, &b.v8[SPP_TEK_LEN], 
-      (SPP_RSA_LEN/8) - SPP_TEK_LEN - 1);
+      (SPP_RSA_LEN/8) - (SPP_TEK_LEN + 2));
   
   // encrypt session keys
   bn_expmod(&r, &b, &e, &m);
