@@ -49,7 +49,7 @@ Both include x86 and x64 versions
 # Known problems
 
 1. Client does not verify public key is sent by trusted party.
-2. The underlying protocol most likely has problems
+2. The underlying protocol most likely has as yet unidentified security problems
 
 # Author
 
