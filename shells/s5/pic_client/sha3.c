@@ -148,9 +148,7 @@ const uint8_t keccakf_piln[24] =
 
     // Chi
     for (j=0; j<25; j+=5) {
-      for (i=0; i<5; i++) {
-        bc[i] = st[j + i];
-      }
+      memcpy ((uint8_t*)&bc[0], &st[j], 5*8);
       for (i=0; i<5; i++) {
         st[j + i] ^= (~bc[(i + 1) % 5]) & bc[(i + 2) % 5];
       }
@@ -169,9 +167,7 @@ void SHA3_Init (SHA3_CTX *c, int mdlen)
   c->blen = 200 - (2 * mdlen);
   c->idx  = 0;
   
-  for (i=0; i<SHA3_STATE_LEN; i++) {
-    c->s.v64[i] = 0;
-  }
+  memset((uint8_t*)&c->s.v8, 0, SHA3_STATE_LEN*8);
 }
 
 void SHA3_Update (SHA3_CTX* c, void *in, uint32_t inlen)
@@ -199,7 +195,5 @@ void SHA3_Final (void* out, SHA3_CTX* c)
   // update context
   SHA3_Transform (c);
   // copy digest to buffer
-  for (i=0; i<c->olen; i++) {
-    ((uint8_t*)out)[i] = c->s.v8[i];
-  }
+  memcpy ((uint8_t*)out, c->s.v8, c->olen);
 }

@@ -36,6 +36,9 @@
 #define U16V(v) ((uint16_t)(v) & 0xFFFFU)
 #define U32V(v) ((uint32_t)(v) & 0xFFFFFFFFUL)
 
+#define memcpy(x,y,z) __movsb(x,y,z)
+#define memset(x,y,z) __stosb(x,y,z)
+
 /*
 #define ROTL8(v, n) \
   (U8V((v) << (n)) | ((v) >> (8 - (n))))

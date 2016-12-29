@@ -33,6 +33,9 @@
 
 #include <stdint.h>
 
+#define memcpy(x,y,z) __movsb(x,y,z)
+#define memset(x,y,z) __stosb(x,y,z)
+
 #define U8V(v)  ((uint8_t)(v)  & 0xFFU)
 #define U16V(v) ((uint16_t)(v) & 0xFFFFU)
 #define U32V(v) ((uint32_t)(v) & 0xFFFFFFFFUL)
@@ -54,11 +57,6 @@
 #define ROTR16(v, n) ROTL16(v, 16 - (n))
 #define ROTR32(v, n) ROTL32(v, 32 - (n))
 #define ROTR64(v, n) ROTL64(v, 64 - (n))
-
-#ifdef USE_ASM
-#define aes_setkey(x, y) aes_setkeyx(x, y)
-#define aes_encrypt(x,y,z) aes_encryptx(x,y,z)
-#endif
 
 #define Nk 8      // key length in words
 #define Nr 14     // number of rounds for 256-bit
@@ -90,11 +88,8 @@ extern "C" {
 #endif
 
   void AES_setkey (void*, aes_ctx*);
-  void aes_setkeyx (aes_ctx*, void*);
-  
   void AES_encrypt (void*, void*, aes_ctx*, int);
-  void aes_encryptx (aes_ctx*, void*, void*, int);
-  
+
 #ifdef __cplusplus
 }
 #endif
