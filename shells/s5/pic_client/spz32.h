@@ -115,6 +115,7 @@ char spz.exe32[]= {
   /* 01DA */ "\x83\xc5\x78"                             /* add ebp, 0x78                    */
   /* 01DD */ "\xc9"                                     /* leave                            */
   /* 01DE */ "\xc3"                                     /* ret                              */
+  
   /* 01DF */ "\x8b\x54\x24\x04"                         /* mov edx, [esp+0x4]               */
   /* 01E3 */ "\x33\xc0"                                 /* xor eax, eax                     */
   /* 01E5 */ "\xeb\x0c"                                 /* jmp 0x1f3                        */
@@ -127,6 +128,7 @@ char spz.exe32[]= {
   /* 01F5 */ "\x84\xc9"                                 /* test cl, cl                      */
   /* 01F7 */ "\x75\xee"                                 /* jnz 0x1e7                        */
   /* 01F9 */ "\xc3"                                     /* ret                              */
+  
   /* 01FA */ "\x55"                                     /* push ebp                         */
   /* 01FB */ "\x8d\x6c\x24\x8c"                         /* lea ebp, [esp-0x74]              */
   /* 01FF */ "\x81\xec\xdc\x00\x00\x00"                 /* sub esp, 0xdc                    */

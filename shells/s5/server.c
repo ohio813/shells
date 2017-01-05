@@ -295,8 +295,13 @@ int s_get (spp_ctx *c, char *path)
       SetLastError(in.data.fx.err);
       xstrerror ("REMOTE: CreateFile(\"%s\")", tx.src);
     }
+    GetFileSizeEx(out, (PLARGE_INTEGER)&total);
     // close handle
     CloseHandle (out);
+    if (total==0) {
+      printf ("%s is empty..deleting", tx.dst);
+      DeleteFile(tx.dst);
+    }
   } else {
     xstrerror ("CreateFile(\"%s\")", tx.dst);
   }

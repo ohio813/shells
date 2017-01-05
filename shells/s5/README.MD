@@ -5,11 +5,15 @@ This is a Windows PIC (Position Independent Code) using RSA key exchange, AES-25
 
 # Stack Limit
 
-If you intend to make modifications to the source in spz.c, bear in mind that if increasing **SPP_DATA_LEN** in include.h or **BIT_LEN** in modexp.h that you must also do the same for the server component. I'd prefer to simplify this but right now this code is just experimental. Also, you should be aware the stack has limits which is why cs32.asm and cs64.asm are required after allocation of stack. However, even with this code, the host application PIC runs in can behave unexpectedly. My recommendation is to minimize as much stack use as possible. In the future, I will try use the heap instead.
+If you intend to make modifications to the source in spz.c, bear in mind that if increasing SPP_DATA_LEN in include.h or BIT_LEN in modexp.h that you must also do the same for the server component. I'd prefer to simplify this but right now this code is just experimental. Also, you should be aware the stack has limits which is why cs32.asm and cs64.asm are required before allocation of stack. However, even with this code, the host application PIC runs in can behave unexpectedly. My recommendation is to minimize as much stack use as possible. In the future, I will try use the heap instead.
 
 For x64, the stack limit is checked each time a routine allocates stack memory. This is required to avoid generating exceptions.
 
 ![alt text](https://github.com/odzhan/shells/blob/master/shells/s5/pic_client/stack_limit.jpg)
+
+# Compiling s5.c
+
+Requires OpenSSL and MSVC.
 
 # Compiling pic_client
 
@@ -36,20 +40,10 @@ And here's screen shot of session with client PIC
 
 ![alt text](https://github.com/odzhan/shells/blob/master/shells/s5/pic_client/s5_server_ss.png)
 
-# Operating systems tested
-
-Both include x86 and x64 versions
-
-1. Windows NT (unlikely without changes to API, specifically winsock)
-2. Windows 2000 (depending on service pack, requires changes like NT)
-3. Windows XP (working on SP1)
-4. Windows 7 (presumably Vista works but untested)
-5. Windows 10
-
 # Known problems
 
 1. Client does not verify public key is sent by trusted party.
-2. The underlying protocol most likely has as yet unidentified security problems
+2. The underlying protocol most likely has problems
 
 # Author
 
