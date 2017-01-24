@@ -36,7 +36,7 @@
 #define SPP_RSA_LEN  2048
 #define SPP_MAC_LEN  32
 #define SPP_BLK_LEN  16
-#define SPP_IV_LEN   16
+#define SPP_CTR_LEN  16
 #define SPP_SIG_LEN  SPP_RSA_LEN/8
 
 #define SPP_CMD_SHELL 1
@@ -72,8 +72,8 @@ typedef struct _spp_ctx_t {
   DWORD      secure;
   DWORD      key_len;
   DWORD      mac_len;
-  DWORD      iv_len;
-  BYTE       iv[64];
+  DWORD      ctr_len;
+  BYTE       ctr[SPP_CTR_LEN];
   ALG_ID     enc_id;
 } spp_ctx;
 

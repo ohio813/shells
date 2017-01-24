@@ -27,7 +27,7 @@
   ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
   POSSIBILITY OF SUCH DAMAGE. */
   
-#include "s5.h"
+#include "s4.h"
 
 /**F*****************************************************************/
 DWORD c_get (spp_ctx *c, char *path)

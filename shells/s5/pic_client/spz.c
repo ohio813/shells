@@ -29,7 +29,7 @@
   
 #include "include.h"
 
-#define RVA2OFS(type, base, rva) (type)((ULONG_PTR) base + rva)
+#define RVA2VA(type, base, rva) (type)((ULONG_PTR) base + rva)
 
 #define SPP_DATA_LEN  2048     // in bytes
 #define SPP_RSA_LEN   2048     // in bits
@@ -327,34 +327,34 @@ LPVOID getapi (DWORD dwHash)
   {
     base = dte->DllBase;
     dos  = (PIMAGE_DOS_HEADER)base;
-    nt   = RVA2OFS(PIMAGE_NT_HEADERS, base, dos->e_lfanew);
+    nt   = RVA2VA(PIMAGE_NT_HEADERS, base, dos->e_lfanew);
     dir  = (PIMAGE_DATA_DIRECTORY)nt->OptionalHeader.DataDirectory;
     rva  = dir[IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress;
     
     // if no export table, continue
     if (rva==0) continue;
     
-    exp = (PIMAGE_EXPORT_DIRECTORY) RVA2OFS(ULONG_PTR, base, rva);
+    exp = (PIMAGE_EXPORT_DIRECTORY) RVA2VA(ULONG_PTR, base, rva);
     cnt = exp->NumberOfNames;
     
     // if no api, continue
     if (cnt==0) continue;
     
-    adr = RVA2OFS(PDWORD,base, exp->AddressOfFunctions);
-    sym = RVA2OFS(PDWORD,base, exp->AddressOfNames);
-    ord = RVA2OFS(PWORD, base, exp->AddressOfNameOrdinals);
-    dll = RVA2OFS(PCHAR, base, exp->Name);
+    adr = RVA2VA(PDWORD,base, exp->AddressOfFunctions);
+    sym = RVA2VA(PDWORD,base, exp->AddressOfNames);
+    ord = RVA2VA(PWORD, base, exp->AddressOfNameOrdinals);
+    dll = RVA2VA(PCHAR, base, exp->Name);
     
     // calculate hash of DLL string
     dll_h = api_hash(dll);
     
     do {
       // calculate hash of api string
-      api = RVA2OFS(PCHAR, base, sym[cnt-1]);
+      api = RVA2VA(PCHAR, base, sym[cnt-1]);
       // add to DLL hash and compare
       if (api_hash(api)+dll_h == dwHash) {
         // return address of function
-        api_adr=RVA2OFS(LPVOID, base, adr[ord[cnt-1]]);
+        api_adr=RVA2VA(LPVOID, base, adr[ord[cnt-1]]);
         // is this a forward reference?
         if ((PBYTE)api_adr >= (PBYTE)exp &&
             (PBYTE)api_adr <  (PBYTE)exp + 

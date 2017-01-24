@@ -159,13 +159,13 @@ uint32_t memxor (uint8_t *pt, uint8_t *ct, uint32_t len)
   return len;
 }
 
-void update_iv (uint8_t *iv)
+void update_ctr (uint8_t *ctr)
 {
   int i;
   
-  for (i=SPP_IV_LEN-1; i>=0; i--) {
-    iv[i]++;
-    if (iv[i]) {
+  for (i=SPP_CTR_LEN-1; i>=0; i--) {
+    ctr[i]++;
+    if (ctr[i]) {
       break;
     }
   }
@@ -174,25 +174,25 @@ void update_iv (uint8_t *iv)
 // encrypt or decrypt in CTR mode
 int spp_crypt (spp_ctx *c, void *in, uint32_t len)
 {
-  DWORD r, iv_len, inlen=len;
+  DWORD r, ctr_len, inlen=len;
   PBYTE p=(PBYTE)in;
-  BYTE  iv[SPP_IV_LEN];
+  BYTE  ctr[SPP_CTR_LEN];
   
   while (inlen > 0)
   {
-    // copy iv into temp space
-    memcpy (iv, c->iv, SPP_IV_LEN);
-    iv_len=SPP_IV_LEN;
+    // copy ctr into temp space
+    memcpy (ctr, c->ctr, SPP_CTR_LEN);
+    ctr_len=SPP_CTR_LEN;
     
     // encrypt with AES-256 in ECB mode
     r=CryptEncrypt (c->hSession, 0, FALSE, 
-      0, iv, &iv_len, SPP_IV_LEN);
+      0, ctr, &ctr_len, SPP_CTR_LEN);
       
     // xor against plaintext
-    r=memxor (p, iv, inlen);
+    r=memxor (p, ctr, inlen);
     
-    // update iv
-    update_iv(c->iv);
+    // update ctr
+    update_ctr(c->ctr);
     
     // advance plaintext position
     p += r;
@@ -249,7 +249,7 @@ int spp_send (spp_ctx *c, spp_blk *in)
   return SPP_ERR_OK;
 }
 
-// receive block of data, fragmented if required
+// recectre block of data, fragmented if required
 int recv_pkt (int s, void *out, uint32_t outlen) 
 {
   int      len;
@@ -263,11 +263,11 @@ int recv_pkt (int s, void *out, uint32_t outlen)
     if (len<=0) return -1;
   }
   
-  DEBUG_PRINT("%i bytes received", sum);
+  DEBUG_PRINT("%i bytes recectred", sum);
   return sum;
 }
 
-// receive packet
+// recectre packet
 int spp_recv (spp_ctx *c, spp_blk *out)
 {
   int     len;
@@ -275,7 +275,7 @@ int spp_recv (spp_ctx *c, spp_blk *out)
   
   ZeroMemory (out, sizeof(spp_blk));
   
-  // receive the length first
+  // recectre the length first
   len=recv_pkt (c->s, &out->len, sizeof(DWORD));
 
   if (len<=0) {
@@ -302,7 +302,7 @@ int spp_recv (spp_ctx *c, spp_blk *out)
     return SPP_ERR_LEN;
   }
   
-  // receive the data
+  // recectre the data
   len=recv_pkt (c->s, &out->buf, out->buflen);
 
   if (c->secure) {
@@ -326,7 +326,7 @@ int spp_recv (spp_ctx *c, spp_blk *out)
   return (len<=0) ? SPP_ERR_SCK : SPP_ERR_OK;
 }
 
-// read in the private key
+// read in the prctrate key
 // only executed as server
 int spp_readkey (spp_ctx *c, spp_blk *key)
 {
@@ -334,7 +334,7 @@ int spp_readkey (spp_ctx *c, spp_blk *key)
   
   key->len=0;
   
-  hFile=CreateFile("rsa_private.bin", 
+  hFile=CreateFile("rsa_prctrate.bin", 
     GENERIC_READ, FILE_SHARE_READ, NULL,
     OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
   
@@ -351,7 +351,7 @@ int spp_readkey (spp_ctx *c, spp_blk *key)
 int spp_init (spp_ctx *c, int mode)
 {
   BOOL    r;
-  spp_blk privkey;
+  spp_blk private;
   
   c->hProv    = 0;
   c->hPublic  = 0;
@@ -376,14 +376,14 @@ int spp_init (spp_ctx *c, int mode)
       
     if (r)
     {
-      // read the private key which should be 
-      // stored in rsa_private.bin
-      r=spp_readkey(c, &privkey);
+      // read the prctrate key which should be 
+      // stored in rsa_prctrate.bin
+      r=spp_readkey(c, &private);
       if (r)
       {
-        // import private key for signing
+        // import prctrate key for signing
         r=CryptImportKey (c->hProv, 
-          privkey.buf, privkey.len, 0, 0, &c->hSign);
+          private.buf, private.len, 0, 0, &c->hSign);
       }
     }
   } else {
@@ -396,7 +396,7 @@ int spp_init (spp_ctx *c, int mode)
 }
 
 // generate a key object using random bytes
-// used for session, mac and iv generation
+// used for session, mac and ctr generation
 int spp_genkey (spp_ctx *c, HCRYPTKEY *key, spp_blk *out)
 {
   BOOL r;
@@ -469,9 +469,9 @@ typedef struct _pt_blob_t {
   BYTE       rgbKeyData[32];
 } pt_blob, *ppt_blob;
 
-// as a server, import iv, export as plaintextblob
-// as a client, generate iv, export as plaintextblob
-int spp_setiv (spp_ctx *c, spp_blk *iv)
+// as a server, import ctr, export as plaintextblob
+// as a client, generate ctr, export as plaintextblob
+int spp_setctr (spp_ctx *c, spp_blk *ctr)
 {
   HCRYPTKEY hKey;
   BOOL      r;
@@ -484,22 +484,22 @@ int spp_setiv (spp_ctx *c, spp_blk *iv)
   
   if (c->mode==SPP_SERVER)
   {
-    // import encrypted iv
-    r=CryptImportKey (c->hProv, iv->buf, iv->buflen, 
+    // import encrypted ctr
+    r=CryptImportKey (c->hProv, ctr->buf, ctr->buflen, 
       c->hPrivate, CRYPT_EXPORTABLE, &hKey);
   } else {
     // generate new key
-    r=spp_genkey (c, &hKey, iv);
+    r=spp_genkey (c, &hKey, ctr);
   }
   // if key generated/imported
   if (r) {
     // export as PLAINTEXTKEYBLOB
-    c->iv_len=sizeof(buf);
+    c->ctr_len=sizeof(buf);
     r=CryptExportKey (hKey, 0, PLAINTEXTKEYBLOB, 
-      0, buf, &c->iv_len);
+      0, buf, &c->ctr_len);
     if (r) {
-      // copy 32-bytes to iv buffer
-      memcpy (c->iv, pb->rgbKeyData, 256/8);
+      // copy 32-bytes to ctr buffer
+      memcpy (c->ctr, pb->rgbKeyData, 256/8);
     } 
     // destroy key object
     CryptDestroyKey (hKey);
@@ -512,7 +512,7 @@ int spp_setiv (spp_ctx *c, spp_blk *iv)
 int spp_handshake (spp_ctx *c)
 {
   int     r=0;
-  spp_blk pubkey, seskey, iv;
+  spp_blk pubkey, seskey, ctr;
   
   if (c->mode==SPP_SERVER)
   {
@@ -532,13 +532,13 @@ int spp_handshake (spp_ctx *c)
           printf ("[ importing session key\n");
           if (spp_setkey(c, &seskey))
           {
-            // wait for IV
-            printf ("[ receiving IV\n");
-            if (spp_recv(c, &iv)==SPP_ERR_OK)
+            // wait for ctr
+            printf ("[ receiving ctr\n");
+            if (spp_recv(c, &ctr)==SPP_ERR_OK)
             {
-              // import, then export to c->iv
-              printf ("[ setting IV\n");
-              r=spp_setiv(c, &iv);
+              // import, then export to c->ctr
+              printf ("[ setting ctr\n");
+              r=spp_setctr(c, &ctr);
             }
           }
         }
@@ -561,13 +561,13 @@ int spp_handshake (spp_ctx *c)
           printf ("[ sending session key\n");
           if (spp_send(c, &seskey)==SPP_ERR_OK)
           {
-            // get random iv
-            printf ("[ generating IV\n");
-            if (spp_setiv(c, &iv))
+            // get random ctr
+            printf ("[ generating ctr\n");
+            if (spp_setctr(c, &ctr))
             {
-              // send iv
-              printf ("[ sending IV\n");
-              r=(spp_send(c, &iv)==SPP_ERR_OK);
+              // send ctr
+              printf ("[ sending ctr\n");
+              r=(spp_send(c, &ctr)==SPP_ERR_OK);
             }
           }
         }
