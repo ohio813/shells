@@ -16,11 +16,6 @@
   while these codes can run fine by themselves, it's when you inject
   into another process space that reveals lots of problems. 
 
-  The first release used shellcode originally written by Peter Ferrie[1] but
-  since getting pi to work on NT, the PICs also had to be updated and are
-  now bigger than before but work on all versions of Windows that have PEB. 
-  
-
 [ usage
 
   Currently, you can execute command in context of remote process, load
