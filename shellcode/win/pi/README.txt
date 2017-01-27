@@ -1,6 +1,6 @@
 
 
-                pi (Process Injector) v0.1
+                pi (Process Injector) v0.2
                 ==========================
 
 [ intro
@@ -10,16 +10,16 @@
   any process regardless of it being 32 or 64-bit.
 
   If running in wow64 mode and target process is 64-bit, pi will 
-  transition to 64-bit mode in order to create thread.
+  transition to 64-bit mode in order to create remote thread.
 
   I wrote this specifically for testing win32 and win64 shellcode because 
   while these codes can run fine by themselves, it's when you inject
   into another process space that reveals lots of problems. 
 
-  I wish to thank Peter Ferrie for giving permission to modify his
-  Platform Independent code which is used in this tool. [1]
-
-
+  The first release used shellcode originally written by Peter Ferrie[1] but
+  since getting pi to work on NT, the PICs also had to be updated and are
+  now bigger than before but work on all versions of Windows that have PEB. 
+  
 
 [ usage
 
@@ -27,8 +27,8 @@
   a DLL or just run PIC (Position Independent Code).
 
   *********************************************************
-  [ PIC/DLL injector v0.1
-  [ Copyright (c) 2014, 2015 Odzhan
+  [ PIC/DLL injector v0.2
+  [ Copyright (c) 2014-2017 Odzhan
 
   [ no target process specified
 
@@ -55,8 +55,8 @@
   You can pass iexplore.exe with a PIC file "exports.bin"
   
   *********************************************************
-  [ PIC/DLL injector v0.1
-  [ Copyright (c) 2014, 2015 Odzhan
+  [ PIC/DLL injector v0.2
+  [ Copyright (c) 2014-2017 Odzhan
   
   [ warning: process requires admin privileges for some process
 

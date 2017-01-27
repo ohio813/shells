@@ -33,6 +33,28 @@
 
 LPVOID get_apix (DWORD dwHash);
 
+#ifndef _MSC_VER
+#ifdef __i386__
+/* for x86 only */
+unsigned long __readfsdword(unsigned long Offset)
+{
+   unsigned long ret;
+   __asm__ volatile ("movl	%%fs:%1,%0"
+     : "=r" (ret) ,"=m" ((*(volatile long *) Offset)));
+   return ret;
+}
+#else
+/* for __x86_64 only */
+unsigned __int64 __readgsqword(unsigned long Offset)
+{
+   void *ret;
+   __asm__ volatile ("movq	%%gs:%1,%0"
+     : "=r" (ret) ,"=m" ((*(volatile long *) (unsigned __int64) Offset)));
+   return (unsigned __int64) ret;
+}
+#endif
+#endif
+
 #define RVA2VA(type, base, rva) (type)((ULONG_PTR) base + rva)
 
 typedef void *PPS_POST_PROCESS_INIT_ROUTINE;

