@@ -89,28 +89,28 @@ typedef struct alg_info_t {
 extern "C" {
 #endif
 
-void* tls_alloc (int);
-void* tls_realloc (void*, int);
-void tls_free (void*);
+  void* tls_alloc (int);
+  void* tls_realloc (void*, int);
+  void tls_free (void*);
 
-int tls_load_lib(tls_ctx*);
+  int tls_load_lib(tls_ctx*);
 
-tls_ctx* tls_new_ctx(void);
-void tls_free_ctx(tls_ctx*);
+  tls_ctx* tls_new_ctx(void);
+  void tls_free_ctx(tls_ctx*);
 
-tls_session* tls_new_session(tls_ctx *c);
-void tls_free_session(tls_ctx*, tls_session*);
+  tls_session* tls_new_session(tls_ctx *c);
+  void tls_free_session(tls_ctx*, tls_session*);
 
-int tls_hello(tls_ctx*, tls_session*);
-int tls_handshake(tls_ctx*, tls_session*);
+  int tls_hello(tls_ctx*, tls_session*);
+  int tls_handshake(tls_ctx*, tls_session*);
 
-int tls_encrypt(tls_ctx*, tls_session*);
-int tls_decrypt(tls_ctx*, tls_session*);
+  int tls_encrypt(tls_ctx*, tls_session*);
+  int tls_decrypt(tls_ctx*, tls_session*);
 
-void tls_info (tls_ctx*, tls_session*, int);
+  void tls_info (tls_ctx*, tls_session*, int);
 
-int tls_recv(int, void*, uint32_t);
-int tls_send(int, void*, uint32_t);
+  int tls_recv(int, void*, uint32_t);
+  int tls_send(int, void*, uint32_t);
 
 #ifdef __cplusplus
 }

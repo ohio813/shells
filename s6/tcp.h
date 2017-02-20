@@ -52,15 +52,15 @@ typedef struct tcp_ctx_ {
 extern "C" {
 #endif
 
-int tcp_send(int, void*, uint32_t);
-int tcp_recv(int, void*, uint32_t);
+  int tcp_send(int, void*, uint32_t);
+  int tcp_recv(int, void*, uint32_t);
 
-int tcp_open(tcp_ctx*);
-void tcp_close(tcp_ctx*);
-char *tcp_addr2ip(tcp_ctx*);
+  int tcp_open(tcp_ctx*);
+  void tcp_close(tcp_ctx*);
+  char *tcp_addr2ip(tcp_ctx*);
 
-tcp_ctx* tcp_new_ctx(int, char*, char*);
-void tcp_free_ctx(tcp_ctx *c);
+  tcp_ctx* tcp_new_ctx(int, char*, char*);
+  void tcp_free_ctx(tcp_ctx *c);
 
 #ifdef __cplusplus
 }

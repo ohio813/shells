@@ -29,155 +29,194 @@
 
 #include "tls.h"
   
-DWORD wait_evt (void)
+#define R_PIPE 0
+#define W_PIPE 1
+
+#define SOCKET_EVENT  0
+#define STDOUT_EVENT  1
+#define PROCESS_EVENT 2
+  
+typedef struct cmd_session_t {
+  HANDLE in[2], out[2];
+  HANDLE evt[4];
+  DWORD  evt_cnt; 
+} cmd_session;
+  
+DWORD wait_evt (tls_session *tls, cmd_session *cs)
 {
   WSANETWORKEVENTS ne;
-  u_long           off=0;
+  u_long           opt;
   DWORD            e;
   
-  // unblock socket
-  WSAEventSelect (s, evt[sck_evt], FD_CLOSE | FD_READ);
+  // set to non-blocking mode
+  WSAEventSelect (tls->sck, cs->evt[SOCKET_EVENT], FD_CLOSE | FD_READ);
   
   // wait for some event
-  e=WaitForMultipleObjects (evt_cnt, evt, FALSE, timeout);
+  e = WaitForMultipleObjects (cs->evt_cnt, cs->evt, FALSE, INFINITE);
 
-  WSAEnumNetworkEvents (s, evt[sck_evt], &ne);    
-  WSAEventSelect (s, evt[sck_evt], 0);
+  // enumerate events
+  WSAEnumNetworkEvents (tls->sck, cs->evt[SOCKET_EVENT], &ne);   
   
-  // block socket
-  ioctlsocket (s, FIONBIO, &off);
+  // clear monitor  
+  WSAEventSelect (tls->sck, cs->evt[SOCKET_EVENT], 0);
   
+  // set socket to blocking mode
+  opt=0;
+  ioctlsocket (tls->sck, FIONBIO, &opt);
+  
+  // closed?
   if (ne.lNetworkEvents & FD_CLOSE) {
-    e=-1;
+    e = ~0UL;
   }
   return e;
 }
 
-#define R_PIPE 0
-#define W_PIPE 1
-
-void cmd (void) 
+void cmd_loop(tls_ctx *ctx, tls_session *tls, cmd_session *cs)
 {
-  SECURITY_ATTRIBUTES sa;
-  PROCESS_INFORMATION pi;
+  DWORD      e, len, p=0;
+  OVERLAPPED lap;
+  
+  ZeroMemory (&lap, sizeof (lap));       
+  lap.hEvent = cs->evt[STDOUT_EVENT];
+          
+  for (;;) 
+  {
+    e=wait_evt(tls, cs);
+
+    if (e == PROCESS_EVENT) {
+      printf ("  [ cmd.exe terminated\n");
+      break;
+    }
+    
+    if (e == -1) {
+      printf ("  [ wait error\n");
+      break;
+    }
+
+    // is this socket event?
+    if (e == SOCKET_EVENT) 
+    {
+      if (tls_decrypt (ctx, tls) != SEC_E_OK) {
+        printf ("tls decrypt error");
+        break;
+      }
+      tls->buf[ctx->sizes.cbHeader + tls->buflen] = 0;
+      printf ("\nwriting %s", &tls->buf[ctx->sizes.cbHeader]);
+      WriteFile (cs->in[W_PIPE], tls->buf, tls->buflen, &len, 0);
+      p--;  // we're ready to read again.              
+    } else
+   
+    // data from cmd.exe?
+    if (e == STDOUT_EVENT) 
+    {
+      if (p == 0)
+      {
+        ReadFile (cs->out[R_PIPE], &tls->buf[ctx->sizes.cbHeader], tls->maxlen, &tls->buflen, &lap);
+        //printf ("%i", GetLastError()); 
+        p++;        
+      } else {
+        //printf ("getting overlapped result");
+        if (!GetOverlappedResult (cs->out[R_PIPE], &lap, &tls->buflen, FALSE)) {
+          //printf("overlapped error %i", GetLastError());
+          // problem...
+          break;
+        }
+        if (tls->buflen != 0)
+        {
+          //printf ("encrypting..");
+          if (tls_encrypt(ctx, tls) != SEC_E_OK) {
+            printf("tls encrypt error");            
+            break;
+          }
+          //printf ("\nok");
+          p--;
+        }
+      }
+    }
+  }
+}
+          
+void tls_cmd (tls_ctx *ctx, tls_session *tls) 
+{
+  SECURITY_ATTRIBUTES sa;  
   STARTUPINFO         si;
-  OVERLAPPED          lap;
+  PROCESS_INFORMATION pi;  
+  cmd_session         cs; 
+  char                pname[32]; 
+  DWORD               t, i;  
+  char pipe[] =
+    { '\\','\\','.','\\','p','i','p','e','\\'};
+    
+  memset (pname, 0,   32);
+  memcpy (pname, pipe, 9);
   
-  HANDLE              in[2], out[2];
-  DWORD               p, e;
+  // set last 8 bytes to something "unique"
+  // which avoids issues with duplicate pipe names
+  t=GetTickCount();
+  for (i=0; i<8; i++) {
+    pname[9+i] = (t % 26) + 'a';
+    t >>= 2;
+  }
   
+  ctx->ss = ctx->sspi->
+    QueryContextAttributes(&tls->ctx, 
+        SECPKG_ATTR_STREAM_SIZES, (PVOID)&ctx->sizes);
+    
   sa.nLength              = sizeof (SECURITY_ATTRIBUTES);
   sa.lpSecurityDescriptor = NULL;
   sa.bInheritHandle       = TRUE;
   
-  evt[stdout_evt = evt_cnt++] = CreateEvent (NULL, TRUE, TRUE, NULL);
+  cs.evt[SOCKET_EVENT] = WSACreateEvent();
+  cs.evt[STDOUT_EVENT] = CreateEvent (NULL, TRUE, TRUE, NULL);
   
-  if (CreatePipe (&in[R_PIPE], &in[W_PIPE], &sa, 0)) 
+  if (CreatePipe (&cs.in[R_PIPE], &cs.in[W_PIPE], &sa, 0)) 
   {  
-    out[R_PIPE] = CreateNamedPipe ("\\\\.\\pipe\\0", 
+    cs.out[R_PIPE] = CreateNamedPipe (pname, 
         PIPE_ACCESS_INBOUND | FILE_FLAG_OVERLAPPED,
         PIPE_TYPE_BYTE      | PIPE_READMODE_BYTE | PIPE_WAIT, 
         PIPE_UNLIMITED_INSTANCES, 0, 0, 0, &sa);
         
-    if (out[R_PIPE] != INVALID_HANDLE_VALUE) 
+    if (cs.out[R_PIPE] != INVALID_HANDLE_VALUE) 
     {  
-      out[W_PIPE] = CreateFile ("\\\\.\\pipe\\0", GENERIC_WRITE, 
-          0, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED, NULL);
+      cs.out[W_PIPE] = CreateFile (pname, GENERIC_WRITE, 
+          0, &sa, OPEN_EXISTING, 
+          FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED, 
+          NULL);
       
-      if (out[W_PIPE] != INVALID_HANDLE_VALUE) 
+      if (cs.out[W_PIPE] != INVALID_HANDLE_VALUE) 
       {
         ZeroMemory (&si, sizeof (si));
         ZeroMemory (&pi, sizeof (pi));
 
-        SetHandleInformation (in[W_PIPE], HANDLE_FLAG_INHERIT, 0);
-        SetHandleInformation (out[R_PIPE], HANDLE_FLAG_INHERIT, 0);
+        SetHandleInformation (cs.in[W_PIPE],  HANDLE_FLAG_INHERIT, 0);
+        SetHandleInformation (cs.out[R_PIPE], HANDLE_FLAG_INHERIT, 0);
         
         si.cb              = sizeof (si);
-        si.hStdInput       = in[R_PIPE];
-        si.hStdError       = out[W_PIPE];
-        si.hStdOutput      = out[W_PIPE];
+        si.hStdInput       = cs.in[R_PIPE];
+        si.hStdError       = cs.out[W_PIPE];
+        si.hStdOutput      = cs.out[W_PIPE];
         si.dwFlags         = STARTF_USESTDHANDLES;
         
         if (CreateProcess (NULL, "cmd", NULL, NULL, TRUE, 
             CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) 
         {
-          evt[proc_evt = evt_cnt++] = pi.hProcess;
+          cs.evt[PROCESS_EVENT] = pi.hProcess;
           
-          ZeroMemory (&lap, sizeof (lap));       
-          lap.hEvent = evt[stdout_evt];
+          cs.evt_cnt = 3;
           
-          p=0;
-          
-          do 
-          {
-            e=wait_evt();
-
-            if (e==ctrl_evt) {
-              printf ("  [ CTRL+C received\n");
-              break;
-            }
-            if (e==proc_evt) {
-              printf ("  [ cmd.exe terminated\n");
-              break;
-            }
-            
-            if (e == -1) break;
-
-            // is this socket event?
-            if (e == sck_evt) 
-            {
-              if (tls_recv () != SEC_E_OK) 
-                break;
-              
-              WriteFile (in[W_PIPE], pbDataIn, cbDataIn, &cbDataIn, 0);
-              p--;  // we're ready to read again.              
-            } else
+          cmd_loop(ctx, tls, &cs);
            
-            // data from cmd.exe?
-            if (e == stdout_evt) 
-            {
-              if (p==0)  // still waiting for previous read to complete?
-              {
-                if (!ReadFile (out[R_PIPE], pbDataOut, cbBufferLen, &cbDataOut, &lap))
-                {
-                  if (GetLastError() != ERROR_IO_PENDING)
-                  {
-                    // problem...
-                    break;
-                  } else {
-                    p++;
-                  }
-                } else {
-                  p++;
-                }
-              } else {
-                if (!GetOverlappedResult (out[R_PIPE], &lap, &cbDataOut, FALSE)) {
-                  // problem...
-                  break;
-                }
-                if (cbDataOut != 0)
-                {
-                  if (ssl_send() != SEC_E_OK) 
-                    break;
-                  p--;
-                }
-              }
-            }
-          } while (1);
-          
           TerminateProcess (pi.hProcess, 0);
           
           CloseHandle (pi.hThread);
           CloseHandle (pi.hProcess);
-          evt_cnt--;
         }
-        CloseHandle (out[W_PIPE]);
+        CloseHandle (cs.out[W_PIPE]);
       }
-      CloseHandle (out[R_PIPE]);
+      CloseHandle (cs.out[R_PIPE]);
     }
-    CloseHandle (in[W_PIPE]);
-    CloseHandle (in[R_PIPE]);
+    CloseHandle (cs.in[W_PIPE]);
+    CloseHandle (cs.in[R_PIPE]);
   }
-  CloseHandle (evt[stdout_evt]);
-  evt_cnt--;
+  CloseHandle (cs.evt[STDOUT_EVENT]);
 }

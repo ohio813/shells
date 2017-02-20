@@ -1,5 +1,5 @@
 /**
-  Copyright © 2015-2017 Odzhan. All Rights Reserved.
+  Copyright © 2017 Odzhan. All Rights Reserved.
 
   Redistribution and use in source and binary forms, with or without
   modification, are permitted provided that the following conditions are
@@ -426,13 +426,13 @@ int tls_encrypt(tls_ctx *c, tls_session *s)
   
   // encrypt
   c->ss = c->sspi->EncryptMessage (&s->ctx, 0, &msg, 0);
-  
+
   // send
   if (c->ss==SEC_E_OK) {
     s->buflen = sb[0].cbBuffer + sb[1].cbBuffer + sb[2].cbBuffer;
-    tls_send (s->s, s->buf, s->buflen);
+    tls_send (s->sck, s->buf, s->buflen);
   }
-  return c->ss==SEC_E_OK ? 1 : 0;
+  return c->ss;
 }
 
 int tls_decrypt(tls_ctx *c, tls_session *s)
@@ -468,7 +468,7 @@ int tls_decrypt(tls_ctx *c, tls_session *s)
         // do we have unencrypted data?
         if (s->buflen) {
           printf("\n  - it was an error");
-          // we we're in process of receiving data
+          // we were in process of receiving data
           // so it's possibly an error
           break;
         }

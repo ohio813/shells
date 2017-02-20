@@ -10,6 +10,8 @@
 void tls_client(tcp_ctx *tcp, tls_ctx *ctx)
 {
   tls_session *tls = tls_new_session(ctx);
+  FD_SET      fds;
+  int         r;
   
   if (tls != NULL) {
     // open connection to remote host
@@ -23,7 +25,13 @@ void tls_client(tcp_ctx *tcp, tls_ctx *ctx)
         printf ("\n  [ connected");
         tls_info(ctx, tls, TLS_CONNECTION_INFO); 
         tls_info(ctx, tls, TLS_STREAM_SIZE);        
-        tls_decrypt(ctx, tls);     
+        while (1) {
+          FD_ZERO(&fds);
+          FD_SET(tcp->s, &fds);
+          r=select(FD_SETSIZE, &fds,0,0,0);
+          if (r<=0) break;
+          tls_decrypt(ctx, tls);
+        }
       } else {
         printf("\n  [ handshake failed"); 
       }
