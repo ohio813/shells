@@ -9,7 +9,7 @@ If you intend to make modifications to the source in spz.c, bear in mind that if
 
 For x64, the stack limit is checked each time a routine allocates stack memory. This is required to avoid generating exceptions.
 
-![alt text](https://github.com/odzhan/shells/blob/master/shells/s5/pic_client/stack_limit.jpg)
+![alt text](https://github.com/odzhan/shells/blob/master/s5/pic_client/stack_limit.png)
 
 # Compiling s5.c
 
@@ -34,11 +34,11 @@ To compile an EXE file for debugging purposes, uncomment DEBUG in include.h and 
 
 Only the DEBUG version of pic_client displays anything to screen so the following is just output of runsc executing spz.bin on localhost.
 
-![alt text](https://github.com/odzhan/shells/blob/master/shells/s5/pic_client/pic_client_ss.png)
+![alt text](https://github.com/odzhan/shells/blob/master/s5/pic_client/pic_client_ss.png)
 
 And here's screen shot of session with client PIC
 
-![alt text](https://github.com/odzhan/shells/blob/master/shells/s5/pic_client/s5_server_ss.png)
+![alt text](https://github.com/odzhan/shells/blob/master/s5/pic_client/pic_server_ss.png)
 
 # Known problems
 
