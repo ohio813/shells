@@ -38,7 +38,7 @@ Only the DEBUG version of pic_client displays anything to screen so the followin
 
 And here's screen shot of session with client PIC
 
-![alt text](https://github.com/odzhan/shells/blob/master/s5/pic_client/pic_server_ss.jpg)
+![alt text](https://github.com/odzhan/shells/blob/master/s5/pic_client/s5_server_ss.png)
 
 # Known problems
 
